@@ -1,0 +1,15 @@
+.venv
+/data
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.sqlite3
+*.log
+*.bak
+*.tmp
+*.swp
+.DS_Store
+.idea
+notes.txt
