@@ -19,3 +19,5 @@ additionally, because of this, you must edit the file paths in the notebooks to 
 the modelling notebook portion of the notebooks should be fine from kaggle, but if you run the eda you must download it to whatever environment you run it on.
 
 this was done this way because this project was split into several notebooks but combined into one for submission
+
+And of course the data must live in under /data in the same directory as the notebook you are running

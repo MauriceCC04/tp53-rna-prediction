@@ -1,7 +1,13 @@
 numpy
 pandas
-matplotlib
-seaborn
 scipy
 scikit-learn
 statsmodels
+matplotlib
+seaborn
+pyarrow
+jupyter
+nbconvert
+# Optional GPU acceleration for the TCGA search section only, if using a compatible CUDA environment:
+# cupy-cuda12x
+# cuml-cu12
