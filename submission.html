@@ -7802,9 +7802,17 @@ a.anchor-link {
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="CCLE-TP53-Project-EDA:-RNA-only-dataset-preparation">CCLE TP53 Project EDA: RNA-only dataset preparation<a class="anchor-link" href="#CCLE-TP53-Project-EDA:-RNA-only-dataset-preparation">¶</a></h1><p>This notebook prepares the CCLE dataset for an <strong>RNA-expression-first TP53 mutation prediction project</strong>.</p>
+<p>Important terminology used throughout the notebook:</p>
+<ul>
+<li><strong>TP53 mutation status</strong> means DNA/somatic mutation status of the <code>TP53</code> gene. It does <strong>not</strong> mean TP53 RNA expression level.</li>
+<li><strong>RNA-expression features</strong> are the model inputs: expression values for thousands of genes.</li>
+<li><strong>TP53 mutation annotations</strong> are used upstream only to construct labels, not as model predictors.</li>
+<li><strong>TP53 target genes / p53-response genes</strong> are genes whose expression may be regulated downstream of p53 activity. They are not genes that are necessarily mutated in the samples.</li>
+<li><strong>Wild type</strong> means no retained protein-altering TP53 mutation annotation under the notebook's label rules. It does not prove fully normal p53 pathway function, copy number, methylation, or protein activity.</li>
+</ul>
 <p>Design choices for the assignment:</p>
 <ul>
-<li><strong>Primary signal source:</strong> mRNA / RNA-seq expression features only.</li>
+<li><strong>Primary signal source:</strong> mRNA / RNA-seq expression features.</li>
 <li><strong>Labels:</strong> TP53 mutation annotations are used only upstream to define targets.</li>
 <li><strong>Lineage:</strong> used as a stratification and audit variable, not as a primary model predictor.</li>
 <li><strong>Primary Task 1 label:</strong> <code>TP53_mut_nonsyn</code>.</li>
@@ -7827,12 +7835,14 @@ a.anchor-link {
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="0.-Setup">0. Setup<a class="anchor-link" href="#0.-Setup">¶</a></h2><p>This section defines Kaggle-ready paths, configuration, and helper functions for:</p>
 <ul>
-<li>TP53 label construction</li>
-<li>train-only RNA filtering</li>
-<li>exploratory RNA association analysis</li>
-<li>sample QC / outlier flagging</li>
-<li>lineage-stratified split construction</li>
+<li>TP53 label construction;</li>
+<li>train-only RNA filtering;</li>
+<li>exploratory RNA association analysis;</li>
+<li>sample QC / outlier flagging;</li>
+<li>lineage-stratified split construction;</li>
+<li>a compact <code>TP53_TARGETS</code> reference set used for p53 biology checks.</li>
 </ul>
+<p>The <code>TP53_TARGETS</code> set is a curated biological reference panel of known/canonical p53-response genes. It is not discovered from this CCLE dataset and it is not a list of mutated genes. The code later checks which of those reference genes are present as RNA-expression columns. The alias mapping, for example <code>WIG1 -&gt; ZMAT3</code>, handles gene-symbol naming differences.</p>
 <p>If raw CCLE files are not attached, the raw EDA cells are skipped and the modeling section tries to use already-created <code>processed/</code> artifacts.</p>
 </div>
 </div>
@@ -7877,10 +7887,12 @@ pandas 2.3.3 | numpy 2.0.2 | scipy 1.16.3 | sklearn 1.6.1 | statsmodels 0.14.6
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="1.-Load-data,-keep-audit-metadata,-and-build-TP53-labels">1. Load data, keep audit metadata, and build TP53 labels<a class="anchor-link" href="#1.-Load-data,-keep-audit-metadata,-and-build-TP53-labels">¶</a></h2><p>The goal here is to build a <strong>clean sample table</strong> with:</p>
 <ul>
-<li>expression data</li>
-<li>audit metadata for lineage stratification and split checks</li>
-<li>TP53 labels</li>
+<li>expression data;</li>
+<li>audit metadata for lineage stratification and split checks;</li>
+<li>TP53 labels.</li>
 </ul>
+<p>The TP53 labels are derived from somatic mutation annotations for <code>TP53</code>. They are not derived from TP53 expression and they do not use RNA values.</p>
+<p>For interpretation, remember that a sample called <code>wild_type</code> here means <strong>no retained protein-altering TP53 mutation under the notebook's rules</strong>. It does not prove that the p53 pathway is fully normal, because other alterations such as copy-number loss, methylation, post-translational effects, or mutations outside the retained annotation logic could still affect p53 biology.</p>
 <p>Metadata is retained for stratification/auditing only. It is <strong>not</strong> used as a predictor in the submitted RNA-only models.</p>
 </div>
 </div>
@@ -8029,6 +8041,7 @@ Cell lines with &gt;1 TP53 event: 115
 <li><code>ProteinChange</code></li>
 </ul>
 <p>This does <strong>not</strong> replace the derived label logic above. It is a QC step to verify that the raw TP53 rows look biologically and syntactically sensible before continuing.</p>
+<p>These mutation columns are never used as model input features. They are used only to decide whether a sample should be labeled as TP53 protein-altering mutant, WT/non-protein-altering, ambiguous, or a broader mutation-consequence class.</p>
 </div>
 </div>
 </div>
@@ -9282,13 +9295,14 @@ Primary split stratification: TP53 label x OncotreeLineage
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="3.-Metadata-diagnostics-for-optional-fine-tuning-variables">3. Metadata diagnostics for optional fine-tuning variables<a class="anchor-link" href="#3.-Metadata-diagnostics-for-optional-fine-tuning-variables">¶</a></h2><p>These checks are here because metadata is allowed for <strong>fine-tuning</strong>, but it is not the main modeling source.</p>
+<h2 id="3.-Metadata-diagnostics-for-optional-audit-variables">3. Metadata diagnostics for optional audit variables<a class="anchor-link" href="#3.-Metadata-diagnostics-for-optional-audit-variables">¶</a></h2><p>These checks are here because metadata can reveal confounding and split imbalance, even when it is not used as a model feature.</p>
 <p>We therefore inspect:</p>
 <ul>
-<li>missingness</li>
-<li>category balance across splits</li>
-<li>primary-label rate by category in training</li>
+<li>missingness;</li>
+<li>category balance across splits;</li>
+<li>primary-label rate by category in training.</li>
 </ul>
+<p>In the submitted RNA-only models, lineage/metadata variables are used for stratification, auditing, subgroup summaries, and grouped robustness checks. They are not predictors in the main model.</p>
 </div>
 </div>
 </div>
@@ -10161,8 +10175,11 @@ Removed low-information genes: 1,424
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="5.-Exploratory-mRNA-association-analysis">5. Exploratory mRNA association analysis<a class="anchor-link" href="#5.-Exploratory-mRNA-association-analysis">¶</a></h2><p>This section is <strong>EDA only</strong>.</p>
-<p>It is useful for understanding RNA structure and TP53-associated genes, but it is <strong>not</strong> the final supervised feature selection step for the main models.</p>
-<p>The final models will redo supervised selection <strong>inside cross-validation</strong> in the modeling notebook.</p>
+<p>It is useful for understanding RNA structure and TP53-associated expression patterns, but it is <strong>not</strong> the final supervised feature selection step for the main models. The final models redo supervised selection <strong>inside cross-validation</strong> in the modeling notebook.</p>
+<h3 id="TP53-target-gene-reference-clarification">TP53 target-gene reference clarification<a class="anchor-link" href="#TP53-target-gene-reference-clarification">¶</a></h3><p>The code below defines a compact <code>TP53_TARGETS</code> set. This is a curated, a priori reference list of canonical p53-response / TP53 pathway genes. It is not generated from the CCLE expression matrix and it is not a list of genes that are mutated in the samples.</p>
+<p>The larger external file <code>tp53_target_genes_fischer2017.csv</code>, used later when available, contains a broader Fischer 2017-style TP53 target-gene reference list. The compact set here is a smaller canonical panel for easier interpretation and overlap checks.</p>
+<p>The analysis compares this predefined reference list with the RNA-expression column names after gene-name cleanup. For example, an expression column such as <code>CDKN1A (1026)</code> corresponds to the gene symbol <code>CDKN1A</code>. The alias dictionary handles naming differences such as <code>WIG1</code>, which is commonly represented as <code>ZMAT3</code>.</p>
+<p>In this EDA section, the target list is used to ask whether known p53-response genes appear among TP53-associated expression patterns. In the CCLE modeling section, the same compact panel is also allowed into the fold-safe RNA feature builder as a pre-specified biological RNA feature panel. That is not mutation-label leakage because the model receives only RNA expression values for those genes, and the gene identities are chosen before fitting. However, it should be described honestly as a biologically informed RNA feature prior, not as a data-discovered list.</p>
 </div>
 </div>
 </div>
@@ -10515,7 +10532,8 @@ Removed low-information genes: 1,424
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="6.-Candidate-sample-QC-flags">6. Candidate sample QC flags<a class="anchor-link" href="#6.-Candidate-sample-QC-flags">¶</a></h2><p>These are retained as a <strong>sensitivity-analysis aid</strong>.</p>
-<p>The notebook does <strong>not</strong> drop outliers by default. The modeling notebook can compare the primary model with and without sure outliers.</p>
+<p>An outlier here means an RNA-expression/QC anomaly, not necessarily a biologically invalid sample. The notebook uses multiple detectors, such as extreme detected-gene burden, PCA distance, isolation forest, local outlier factor, total-expression MAD, and detected-gene MAD. Each detector casts an outlier vote; samples with several votes are flagged as possible or sure outliers.</p>
+<p>The notebook does <strong>not</strong> drop outliers by default. The modeling notebook can compare the primary model with and without sure outliers. This avoids bias from deleting biologically unusual cancer samples without evidence that they are technical failures.</p>
 </div>
 </div>
 </div>
@@ -10887,6 +10905,7 @@ Possible outliers (= 3 votes): 24
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="CCLE-TP53-Modeling-Notebook:-RNA-only-models-with-lineage-stratified-splits">CCLE TP53 Modeling Notebook: RNA-only models with lineage-stratified splits<a class="anchor-link" href="#CCLE-TP53-Modeling-Notebook:-RNA-only-models-with-lineage-stratified-splits">¶</a></h1><p>This notebook follows the assignment literally: predictive features are gene-expression measurements. Lineage is used only for stratified splitting, split-balance audits, and subgroup/grouped evaluation. It is not used as a predictor.</p>
+<p>Important clarification: the compact <code>TP53_TARGETS</code> list used in this CCLE modeling section is a predefined p53-response gene panel. Some of those genes may be included as RNA-expression features by the fold-safe feature builder, but they are still expression measurements, not mutation calls. The mutation label remains based only on TP53 mutation annotations.</p>
 </div>
 </div>
 </div>
@@ -10915,7 +10934,8 @@ Possible outliers (= 3 votes): 24
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="0.-Setup">0. Setup<a class="anchor-link" href="#0.-Setup">¶</a></h2>
+<h2 id="0.-Setup">0. Setup<a class="anchor-link" href="#0.-Setup">¶</a></h2><p>This setup block defines model configuration, helper constants, and the compact <code>TP53_TARGETS</code> / <code>TARGET_ALIASES</code> reference panel.</p>
+<p><code>TP53_TARGETS</code> is not all genes in the dataset. It is a small curated set of canonical p53-response genes used as a biological prior and interpretation aid. <code>TARGET_ALIASES = {"WIG1": "ZMAT3"}</code> prevents a known p53-response gene from being missed because of gene-symbol naming differences.</p>
 </div>
 </div>
 </div>
@@ -10994,7 +11014,13 @@ FOUND ccle_possible_outliers.txt
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="Custom-transformers-and-feature-builders">Custom transformers and feature builders<a class="anchor-link" href="#Custom-transformers-and-feature-builders">¶</a></h3>
+<h3 id="Custom-transformers-and-feature-builders">Custom transformers and feature builders<a class="anchor-link" href="#Custom-transformers-and-feature-builders">¶</a></h3><p>The custom RNA feature builder keeps the model leakage-aware by fitting feature selection and scaling only inside the current training data or cross-validation fold.</p>
+<p>The selector has two sources of RNA features:</p>
+<ol>
+<li>genes selected from training-fold RNA/label association statistics; and</li>
+<li>genes from the predefined <code>TP53_TARGETS</code> panel that are present in the RNA matrix.</li>
+</ol>
+<p>The second source is a biological prior, not a mutation feature. It does not tell the model whether TP53 is mutated in a sample; it only makes the expression values of known p53-response genes available to the classifier. This should be described as an a priori RNA feature panel, not as genes discovered from the dataset and not as a list of mutated genes.</p>
 </div>
 </div>
 </div>
@@ -11005,7 +11031,7 @@ FOUND ccle_possible_outliers.txt
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h3 id="Pipeline-factories">Pipeline factories<a class="anchor-link" href="#Pipeline-factories">¶</a></h3>
+<h3 id="Pipeline-factories">Pipeline factories<a class="anchor-link" href="#Pipeline-factories">¶</a></h3><p>The pipeline factories combine the RNA feature builder with the classifier. The resulting pipelines use only RNA-expression columns as predictors. Mutation annotations are not passed to the classifier, and lineage is not passed as a feature.</p>
 </div>
 </div>
 </div>
@@ -11017,7 +11043,7 @@ FOUND ccle_possible_outliers.txt
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="1.-Label-definition-and-task-alignment">1. Label definition and task alignment<a class="anchor-link" href="#1.-Label-definition-and-task-alignment">¶</a></h2><p><strong>Primary prediction target:</strong> sample-level <code>TP53_mut_nonsyn</code></p>
-<p>This target is derived upstream from raw somatic mutation rows where <code>HugoSymbol == "TP53"</code> in the mutation file.</p>
+<p>This target is derived upstream from raw somatic mutation rows where <code>HugoSymbol == "TP53"</code> in the mutation file. It is a DNA/somatic mutation label, not TP53 RNA expression.</p>
 <p>The raw TP53 mutation annotations reviewed in the EDA are:</p>
 <ul>
 <li><code>HugoSymbol</code></li>
@@ -11028,10 +11054,11 @@ FOUND ccle_possible_outliers.txt
 </ul>
 <p>At the sample level:</p>
 <ul>
-<li>positive class = TP53 protein-altering events (<code>lof_or_splice</code> or <code>missense_or_inframe</code>)</li>
-<li>negative class = samples without those TP53 protein-altering events</li>
-<li>ambiguous / non-protein-altering TP53 calls are tracked separately for sensitivity analysis</li>
+<li>positive class = TP53 protein-altering events (<code>lof_or_splice</code> or <code>missense_or_inframe</code>);</li>
+<li>negative class = samples without those retained TP53 protein-altering events;</li>
+<li>ambiguous / non-protein-altering TP53 calls are tracked separately for sensitivity analysis.</li>
 </ul>
+<p>The word <code>wild_type</code> in this notebook should be read operationally: no retained protein-altering TP53 mutation under the available annotation rules. It does not prove complete normality of the p53 pathway.</p>
 <p>Important: mutation annotation columns are used only to define the target upstream, not as model input features.</p>
 </div>
 </div>
@@ -11386,6 +11413,7 @@ Metadata columns used as predictors: []
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="2.-Build-the-RNA-only-model-registry">2. Build the RNA-only model registry<a class="anchor-link" href="#2.-Build-the-RNA-only-model-registry">¶</a></h2><p>The model registry is intentionally restricted to RNA-expression predictors. Lineage and other metadata are not included as model features; they are used only for stratification and subgroup evaluation.</p>
+<p>The compact TP53 target-gene panel may contribute RNA-expression features through the fold-safe feature builder, but this remains an RNA-only model: the classifier receives expression values, not TP53 mutation annotations or mutation consequences.</p>
 </div>
 </div>
 </div>
@@ -12062,6 +12090,7 @@ Soft-voting ensemble members selected by validation AUPRC: ['ablation_random_for
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="7.-Interpret-the-fixed-primary-mRNA-model">7. Interpret the fixed primary mRNA model<a class="anchor-link" href="#7.-Interpret-the-fixed-primary-mRNA-model">¶</a></h2><p>This section is now guaranteed to work because the primary model is fixed as a linear mRNA model.</p>
+<p>Coefficient interpretation is descriptive. A large coefficient means the gene's RNA expression helps the fitted classifier separate the labels in this dataset. It does not prove that the gene causes TP53 mutation status. Some genes are flagged as <code>is_tp53_target</code> because they appear in the predefined p53-response gene panel or its alias mapping; this is used to assess biological plausibility, not to claim causality.</p>
 </div>
 </div>
 </div>
@@ -13017,7 +13046,7 @@ It asks whether RNA still works when the evaluation is made stricter with lineag
 <p>A literal mutation-type task could try to separate many raw categories such as missense, nonsense, frameshift deletion, frameshift insertion, splice-site, in-frame insertion, and in-frame deletion. In practice, several of these exact categories are rare, so modelling each one separately would create unstable classes. Therefore, I use broader TP53 mutation-type/consequence groups that preserve the main biological distinction while keeping enough samples per class.</p>
 <p>For CCLE, the Task 2 classes are:</p>
 <ul>
-<li><code>wild_type</code>: no protein-altering TP53 event used for the primary label;</li>
+<li><code>wild_type</code>: no retained protein-altering TP53 event used for the primary label. This is an operational label, not proof of fully normal p53 biology;</li>
 <li><code>missense_or_inframe</code>: missense or in-frame TP53 alterations, which often preserve protein length but alter amino-acid sequence or local structure;</li>
 <li><code>lof_or_splice</code>: loss-of-function-like events, including truncating, frameshift, nonsense, or splice-related events.</li>
 </ul>
@@ -13801,10 +13830,10 @@ CCLE Task 2 class counts:
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="15.-CCLE-final-project-conclusions">15. CCLE final project conclusions<a class="anchor-link" href="#15.-CCLE-final-project-conclusions">¶</a></h2><p>The CCLE analysis explicitly separates the two assignment tasks.</p>
-<p><strong>Task 1</strong> predicts binary TP53 nonsynonymous/protein-altering mutation status from RNA expression. The primary models are RNA-only. Lineage is used for stratification, auditing, subgroup analysis, and grouped robustness checks, but not as a predictor in the main RNA model.</p>
-<p><strong>Task 2</strong> predicts coarse TP53 mutation-type/consequence classes from RNA expression. The 3-class model distinguishes <code>wild_type</code>, <code>missense_or_inframe</code>, and <code>lof_or_splice</code>. To address a stricter reading of the assignment, the notebook also reports a mutant-only Task 2 evaluation comparing <code>missense_or_inframe</code> versus <code>lof_or_splice</code> only among TP53-mutant held-out samples.</p>
+<p><strong>Task 1</strong> predicts binary TP53 nonsynonymous/protein-altering mutation status from RNA expression. This means DNA-level TP53 mutation status, not TP53 RNA expression level. The primary models are RNA-only. Lineage is used for stratification, auditing, subgroup analysis, and grouped robustness checks, but not as a predictor in the main RNA model.</p>
+<p><strong>Task 2</strong> predicts coarse TP53 mutation-type/consequence classes from RNA expression. The 3-class model distinguishes <code>wild_type</code>, <code>missense_or_inframe</code>, and <code>lof_or_splice</code>. Here <code>wild_type</code> means no retained protein-altering TP53 mutation annotation; it does not prove fully normal p53 function. To address a stricter reading of the assignment, the notebook also reports a mutant-only Task 2 evaluation comparing <code>missense_or_inframe</code> versus <code>lof_or_splice</code> only among TP53-mutant held-out samples.</p>
 <p>The CCLE Task 2 results are encouraging. The best 3-class RNA model reaches approximately 0.82 test accuracy, 0.82 balanced accuracy, 0.81 macro-F1, and 0.93 one-vs-rest macro AUROC. The strict mutant-only Task 2 evaluation gives approximately 0.85 macro-F1 for distinguishing missense/in-frame from LOF/splice-like events. These results support the conclusion that RNA expression carries information about broad TP53 mutation consequences, not only binary TP53 mutation status.</p>
-<p>The biological interpretation remains cautious. Important RNA features include plausible TP53 pathway genes and p53-response genes, but feature importance should not be interpreted causally. A gene may be predictive because it is downstream of TP53, correlated with proliferation or DNA-damage response, associated with lineage, or linked to other cancer-context effects. The lineage-stratified split, per-lineage checks, metadata audits, and grouped evaluation are included specifically to reduce and assess this confounding risk.</p>
+<p>The biological interpretation remains cautious. Important RNA features include plausible TP53 pathway genes and p53-response genes. The TP53 target-gene list is a predefined p53-response reference panel, not a list of mutated genes and not a list discovered from the dataset. Feature importance should not be interpreted causally. A gene may be predictive because it is downstream of TP53, correlated with proliferation or DNA-damage response, associated with lineage, or linked to other cancer-context effects. The lineage-stratified split, per-lineage checks, metadata audits, and grouped evaluation are included specifically to reduce and assess this confounding risk.</p>
 <p>Overall, the CCLE part of the project supports the main claim that TP53 mutation status is predictable from RNA expression, while also showing that mutation-type prediction is feasible but more challenging and should be evaluated with macro-averaged metrics and per-class reports.</p>
 </div>
 </div>
@@ -13839,6 +13868,7 @@ CCLE Task 2 class counts:
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="TCGA-Pan-Cancer-EDA-for-Predicting-TP53-Mutation-Status-from-RNA-Expression">TCGA Pan-Cancer EDA for Predicting TP53 Mutation Status from RNA Expression<a class="anchor-link" href="#TCGA-Pan-Cancer-EDA-for-Predicting-TP53-Mutation-Status-from-RNA-Expression">¶</a></h1><h2 id="Objective">Objective<a class="anchor-link" href="#Objective">¶</a></h2><p>Explore whether <strong>TP53 nonsynonymous mutation status</strong> can be predicted from <strong>TCGA RNA expression</strong>.</p>
+<p>Here, TP53 mutation status means the somatic mutation annotation for the <code>TP53</code> gene, not the expression level of TP53 itself.</p>
 <p>This EDA is designed to support the modelling notebook by defining a clean, leakage-aware TCGA cohort and identifying the major modelling risks.</p>
 <h2 id="Main-EDA-goals">Main EDA goals<a class="anchor-link" href="#Main-EDA-goals">¶</a></h2><ol>
 <li>Load and inspect raw TCGA/Xena RNA, mutation, and phenotype files.</li>
@@ -13849,7 +13879,7 @@ CCLE Task 2 class counts:
 <li>Check RNA missingness, dimensionality, variance structure, and broad PCA patterns.</li>
 <li>Identify leakage and confounding risks before modelling.</li>
 </ol>
-<h2 id="Key-warning">Key warning<a class="anchor-link" href="#Key-warning">¶</a></h2><p>In pan-cancer TCGA data, cancer type can strongly confound TP53 prediction because cancer type affects both TP53 mutation prevalence and RNA expression. Therefore, the modelling notebook should include cancer-type baselines and cancer-type-grouped evaluation.</p>
+<h2 id="Key-warning">Key warning<a class="anchor-link" href="#Key-warning">¶</a></h2><p>In pan-cancer TCGA data, cancer type can strongly confound TP53 prediction because cancer type affects both TP53 mutation prevalence and RNA expression. The modelling notebook therefore uses cancer-type-aware stratification and cancer-type-grouped evaluation. A cancer-type-only baseline would be a useful additional confounding diagnostic, but the submitted primary models intentionally remain RNA-only.</p>
 </div>
 </div>
 </div>
@@ -15573,6 +15603,7 @@ Chosen cancer type column: cancer type abbreviation
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="Load-RNA-expression-matrix">Load RNA expression matrix<a class="anchor-link" href="#Load-RNA-expression-matrix">¶</a></h2><p>The expected Xena RNA layout is usually genes as rows and samples as columns. The code below detects that layout and converts the matrix to samples × genes.</p>
+<p>One common source of confusion is that the first column may be named <code>sample</code> even when the entries are actually gene IDs. The orientation check resolves this before modelling.</p>
 </div>
 </div>
 </div>
@@ -15664,6 +15695,7 @@ RNA feature preview: ['ENSG00000242268.2', 'ENSG00000259041.1', 'ENSG00000270112
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="TP53-mutation-label-construction">TP53 mutation label construction<a class="anchor-link" href="#TP53-mutation-label-construction">¶</a></h2><p>The primary label is <code>TP53_mut_nonsyn</code>: whether a sample has at least one nonsynonymous / protein-altering TP53 mutation.</p>
 <p>This is preferred over using any TP53 row because synonymous and ambiguous TP53 annotations should not be treated as equivalent to protein-altering TP53 mutations.</p>
+<p>This label is not TP53 expression level. It is a DNA/somatic mutation label derived from mutation annotations. Samples without retained protein-altering TP53 events are treated as WT/non-protein-altering for this task, but that does not guarantee fully normal p53 pathway function.</p>
 </div>
 </div>
 </div>
@@ -16735,6 +16767,7 @@ Missing cancer type: 39
 <li>Prefer primary tumour samples when a patient has multiple retained tumour samples.</li>
 </ol>
 <p>This cohort definition should match the TCGA modelling notebook. Supervised gene filtering and model fitting should still happen only after train/test splitting.</p>
+<p>Operational WT/non-mutant status means no retained protein-altering TP53 event under the available annotation rules, not proof of normal p53 biology.</p>
 </div>
 </div>
 </div>
@@ -17582,6 +17615,7 @@ The modeling section will stream-select top-variance RNA features before materia
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="TP53-target-gene-and-gene-identifier-limitation">TP53 target-gene and gene-identifier limitation<a class="anchor-link" href="#TP53-target-gene-and-gene-identifier-limitation">¶</a></h2><p>The RNA matrix typically uses Ensembl gene IDs, while TP53 target-gene lists often use gene symbols. Direct overlap between Ensembl IDs and symbols is not meaningful without an annotation map.</p>
+<p>The optional <code>tp53_target_genes_fischer2017.csv</code> file is a broad curated p53/TP53 target-gene reference list. These are genes whose expression may respond to p53 activity; they are not genes that are necessarily mutated in the samples. This reference is used only for biological sanity checks and coefficient annotation when identifier mapping allows it.</p>
 </div>
 </div>
 </div>
@@ -17682,6 +17716,7 @@ Direct symbol-to-Ensembl overlap should not be interpreted without annotation.
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="Exploratory-RNA-label-differences">Exploratory RNA-label differences<a class="anchor-link" href="#Exploratory-RNA-label-differences">¶</a></h2><p>This section is descriptive only. It should not be used as final feature selection because it uses the full clean cohort and labels.</p>
+<p>If TP53 target-gene references are used here, they are used for interpretation of RNA-expression patterns, not for constructing mutation labels.</p>
 </div>
 </div>
 </div>
@@ -17716,6 +17751,7 @@ This avoids duplicating the modeling section's RNA load and avoids leakage-prone
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="EDA-conclusions">EDA conclusions<a class="anchor-link" href="#EDA-conclusions">¶</a></h1><h2 id="Proposed-main-label">Proposed main label<a class="anchor-link" href="#Proposed-main-label">¶</a></h2><p>The primary target is <code>TP53_mut_nonsyn</code>, defined as whether a sample has at least one nonsynonymous / protein-altering TP53 mutation.</p>
+<p>This is a somatic mutation label for TP53, not TP53 RNA expression. The corresponding WT/non-mutant group means no retained protein-altering TP53 event under the notebook's mutation-annotation rules, not proof that the p53 pathway is fully intact.</p>
 <h2 id="Final-modelling-cohort">Final modelling cohort<a class="anchor-link" href="#Final-modelling-cohort">¶</a></h2><p>The final TCGA modelling cohort uses the same rules as the modeling section:</p>
 <ol>
 <li>keep samples present in the RNA matrix;</li>
@@ -17725,7 +17761,7 @@ This avoids duplicating the modeling section's RNA load and avoids leakage-prone
 <li>keep one sample per patient to prevent patient-level leakage;</li>
 <li>prefer primary tumour samples when multiple tumour samples exist for the same patient.</li>
 </ol>
-<p>Cancer type is retained for stratification and grouped evaluation only. It is not used as a model feature.</p>
+<p>Cancer type is retained for stratification and grouped evaluation only. It is not used as a model feature in the primary RNA-only models.</p>
 </div>
 </div>
 </div>
@@ -17736,7 +17772,8 @@ This avoids duplicating the modeling section's RNA load and avoids leakage-prone
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h1 id="TCGA-Pan-Cancer-Modeling-for-Predicting-TP53-Mutation-Status-from-RNA-Expression">TCGA Pan-Cancer Modeling for Predicting TP53 Mutation Status from RNA Expression<a class="anchor-link" href="#TCGA-Pan-Cancer-Modeling-for-Predicting-TP53-Mutation-Status-from-RNA-Expression">¶</a></h1><p>This notebook builds a leakage-aware workflow for predicting <strong>TP53 mutation status</strong> from <strong>TCGA RNA expression</strong>.</p>
-<p>Cancer type is used only as a <strong>stratification/grouping/audit variable</strong>, not as a predictor on the same level as mRNA.</p>
+<p>TP53 mutation status is a somatic mutation label for the <code>TP53</code> gene. It is not TP53 RNA expression level. RNA expression across genes is the predictor space.</p>
+<p>Cancer type is used only as a <strong>stratification/grouping/audit variable</strong> in the submitted primary RNA-only models. It is not included as a predictor in those models.</p>
 <h2 id="Main-goals">Main goals<a class="anchor-link" href="#Main-goals">¶</a></h2><ul>
 <li>build a <strong>tumour-only</strong>, <strong>one-sample-per-patient</strong> TCGA cohort;</li>
 <li>define <strong>TP53 nonsynonymous mutation status</strong> from mutation annotations;</li>
@@ -17868,6 +17905,7 @@ first column is gene ID, remaining columns are sample IDs</p>
 </li>
 </ol>
 <p>The loader detects the layout automatically and then loads only the retained cohort later.</p>
+<p>A misleading column name such as <code>sample</code> does not by itself prove that rows are samples. In the TCGA/Xena RNA file, the first column can contain gene identifiers even if the column header is named <code>sample</code>, so orientation detection is essential before creating the ML matrix.</p>
 </div>
 </div>
 </div>
@@ -17895,9 +17933,10 @@ Example RNA-available samples: ['TCGA-19-1787-01', 'TCGA-S9-A7J2-01', 'TCGA-G3-A
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="Rebuild-the-TP53-sample-level-label">Rebuild the TP53 sample-level label<a class="anchor-link" href="#Rebuild-the-TP53-sample-level-label">¶</a></h2><p>This follows the same scientific rule as before:</p>
 <ul>
-<li><code>TP53_mut_nonsyn = 1</code> if a sample has at least one protein-altering TP53 event</li>
-<li>ambiguous / mixed cases are tracked and later excluded from modeling</li>
+<li><code>TP53_mut_nonsyn = 1</code> if a sample has at least one protein-altering TP53 event;</li>
+<li>ambiguous / mixed cases are tracked and later excluded from modeling.</li>
 </ul>
+<p>The negative/WT class means no retained protein-altering TP53 event under the mutation-file rules. It does not exclude every possible mechanism of p53 pathway disruption.</p>
 </div>
 </div>
 </div>
@@ -18263,10 +18302,11 @@ Example RNA-available samples: ['TCGA-19-1787-01', 'TCGA-S9-A7J2-01', 'TCGA-G3-A
 <h2 id="Task-2-label-design:-sample-level-TP53-mutation-type">Task 2 label design: sample-level TP53 mutation type<a class="anchor-link" href="#Task-2-label-design:-sample-level-TP53-mutation-type">¶</a></h2><p>This block constructs the TCGA mutation-type target required by the assignment. The raw mutation annotations are converted to sample-level TP53 mutation-type/consequence labels.</p>
 <p>The main TCGA Task 2 classes are:</p>
 <ul>
-<li><code>WT</code>: no retained protein-altering TP53 mutation in the sample;</li>
+<li><code>WT</code>: no retained protein-altering TP53 mutation in the sample under the notebook's rules;</li>
 <li><code>missense</code>: TP53 missense events;</li>
 <li><code>truncating_or_splice</code>: truncating, frameshift, nonsense, or splice-related TP53 events.</li>
 </ul>
+<p><code>WT</code> is included in the main 3-class status/type formulation, but it should not be interpreted as proof of a completely normal p53 pathway. It only means no retained protein-altering TP53 mutation annotation was used for the label.</p>
 <p>Rare or ambiguous categories are counted first and then excluded from the main multiclass model rather than being forced into unstable labels. This is a deliberate modelling choice. A very literal mutation-type classifier could separate all raw categories, but several mutation subtypes have limited sample support. Collapsing related categories into broader biological consequence classes gives a more stable supervised learning target while still addressing the assignment's goal of predicting TP53 mutation type.</p>
 <p>The strict mutant-only Task 2 evaluation later in the notebook removes WT samples and evaluates only the distinction between <code>missense</code> and <code>truncating_or_splice</code> among TP53-mutant test samples.</p>
 </div>
@@ -18609,6 +18649,7 @@ Overall fraction exactly at floor value: 0.40841196493037646
 <h2 id="Prepare-train/test-data">Prepare train/test data<a class="anchor-link" href="#Prepare-train/test-data">¶</a></h2><p>The TCGA binary Task 1 split is stratified by <strong>TP53 mutation status x cancer type</strong>. Cancer type is the TCGA analogue of CCLE lineage: it is a major determinant of gene expression and can also affect TP53 mutation prevalence. Stratifying by the combined label and cancer type helps prevent the train and test sets from having very different cancer-type mixtures.</p>
 <p>As in CCLE, cancer type is used for splitting, auditing, and grouped evaluation. It is not used as a predictor in the primary RNA-only model.</p>
 <p>The RNA matrix is loaded only for the final retained modelling cohort. For memory reasons, the TCGA RNA loader may apply an initial unsupervised high-variance gene cap while streaming the RNA matrix. This step uses RNA variance only and does not use TP53 labels. It is therefore not target leakage, but it is still less ideal than performing every feature-space choice after the split. All supervised feature selection, floor filtering, scaling, and model fitting are performed using training data or cross-validation workflows.</p>
+<p>A random holdout split that is stratified by cancer type is still not the same as proving generalization to unseen cancer types. The grouped cancer-type evaluation later is the stricter anti-confounding check.</p>
 </div>
 </div>
 </div>
@@ -18860,7 +18901,8 @@ Cancer types absent from test but present in train: []
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Baseline-2:-Cancer-type-only-logistic-regression">Baseline 2: Cancer-type-only logistic regression<a class="anchor-link" href="#Baseline-2:-Cancer-type-only-logistic-regression">¶</a></h2>
+<h2 id="Baseline-2:-Cancer-type-only-logistic-regression">Baseline 2: Cancer-type-only logistic regression<a class="anchor-link" href="#Baseline-2:-Cancer-type-only-logistic-regression">¶</a></h2><p>This section is intentionally not trained in the submitted notebook. Cancer type is used for stratification, auditing, and grouped evaluation only, not as a model predictor.</p>
+<p>A cancer-type-only baseline would be useful as an additional confounding diagnostic, but including it as a predictive model would move away from the primary RNA-only submission. The code below therefore records that no metadata-only model is trained.</p>
 </div>
 </div>
 </div>
@@ -18888,12 +18930,13 @@ No cancer-type-only metadata model is trained; cancer type is used only for stra
 <h2 id="Main-model:-RNA-only-elastic-net-logistic-regression">Main model: RNA-only elastic-net logistic regression<a class="anchor-link" href="#Main-model:-RNA-only-elastic-net-logistic-regression">¶</a></h2><p>This uses the same scientific model family as the CPU notebook, but the search loop is implemented manually so that the heavy elastic-net fits can use <strong>cuML</strong> when available.</p>
 <p>Per training fold, the RNA pipeline does:</p>
 <ul>
-<li>floor-value filtering</li>
-<li>top-variance prefiltering</li>
-<li><code>SelectKBest</code></li>
-<li>scaling</li>
-<li>elastic-net logistic regression</li>
+<li>floor-value filtering;</li>
+<li>top-variance prefiltering;</li>
+<li><code>SelectKBest</code>;</li>
+<li>scaling;</li>
+<li>elastic-net logistic regression.</li>
 </ul>
+<p>These operations must be fit inside the training fold / CV split to avoid leakage. <code>SelectKBest</code> is supervised, so it should never be fit on the full dataset before evaluating on held-out test samples.</p>
 </div>
 </div>
 </div>
@@ -20440,6 +20483,7 @@ Completed grouped outer fold 3/3
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="Inspect-RNA-coefficients-and-optional-biological-sanity-checks">Inspect RNA coefficients and optional biological sanity checks<a class="anchor-link" href="#Inspect-RNA-coefficients-and-optional-biological-sanity-checks">¶</a></h2><p>This section strips Ensembl version suffixes, optionally maps to gene symbols, and checks overlap with the TP53 target list when possible.</p>
+<p>The TP53 target list here refers to curated p53-response genes, such as the optional <code>tp53_target_genes_fischer2017.csv</code> reference, not to genes that are mutated. Because TCGA RNA features are often Ensembl IDs, coefficient interpretation is limited unless a reliable Ensembl-to-symbol annotation is available. Without that mapping, individual coefficients should be treated as predictive RNA features rather than named biological mechanisms.</p>
 </div>
 </div>
 </div>
@@ -21293,7 +21337,7 @@ Canonical TP53 pathway genes selected: 0
 <div class="jp-Collapser jp-InputCollapser jp-Cell-inputCollapser">
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
-<h2 id="Combined-model-on-the-random-holdout">Combined model on the random holdout<a class="anchor-link" href="#Combined-model-on-the-random-holdout">¶</a></h2><p>This tests whether adding cancer type to RNA improves random-holdout performance.</p>
+<h2 id="Combined-RNA-+-cancer-type-model-intentionally-omitted">Combined RNA + cancer-type model intentionally omitted<a class="anchor-link" href="#Combined-RNA-+-cancer-type-model-intentionally-omitted">¶</a></h2><p>This section is kept as a placeholder to make the modelling choice explicit. The submitted primary models remain RNA-only, so cancer type is not added as a predictor. Cancer type is used for stratification, auditing, and grouped evaluation instead.</p>
 </div>
 </div>
 </div>
@@ -21599,6 +21643,7 @@ Final holdout comparison including main models, RNA ablations, and soft-voting e
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="Within-cancer-RNA-evaluation">Within-cancer RNA evaluation<a class="anchor-link" href="#Within-cancer-RNA-evaluation">¶</a></h2><p>This asks whether the RNA model still carries TP53 signal <strong>within individual tumour types</strong>, not just across pan-cancer mixtures.</p>
+<p>This is a stricter confounding check than a random pan-cancer holdout. If the run flag is disabled, the notebook should be described as including grouped cancer-type CV but not a full within-cancer model audit.</p>
 </div>
 </div>
 </div>
@@ -21622,7 +21667,8 @@ Final holdout comparison including main models, RNA ablations, and soft-voting e
 </div>
 <div class="jp-InputArea jp-Cell-inputArea"><div class="jp-RenderedHTMLCommon jp-RenderedMarkdown jp-MarkdownOutput" data-mime-type="text/markdown">
 <h2 id="Final-conclusions-and-exam-defense-summary">Final conclusions and exam-defense summary<a class="anchor-link" href="#Final-conclusions-and-exam-defense-summary">¶</a></h2><p>This notebook addresses both required coursework tasks using gene expression profiles as predictors and TP53 mutation annotations as labels.</p>
-<h3 id="Task-1:-TP53-mutant-versus-wild-type">Task 1: TP53 mutant versus wild type<a class="anchor-link" href="#Task-1:-TP53-mutant-versus-wild-type">¶</a></h3><p>Task 1 is formulated as binary classification: TP53 protein-altering/nonsynonymous mutant versus TP53 wild type or non-protein-altering status. The labels are constructed from somatic mutation annotations, not from RNA expression. The primary predictors are RNA expression measurements across genes.</p>
+<h3 id="Task-1:-TP53-mutant-versus-wild-type">Task 1: TP53 mutant versus wild type<a class="anchor-link" href="#Task-1:-TP53-mutant-versus-wild-type">¶</a></h3><p>Task 1 is formulated as binary classification: TP53 protein-altering/nonsynonymous mutant versus no retained protein-altering TP53 mutation. The labels are constructed from somatic mutation annotations, not from RNA expression. The primary predictors are RNA expression measurements across genes.</p>
+<p>The WT/non-mutant class should be interpreted operationally. It means no retained protein-altering TP53 event under the available annotation rules; it does not prove that the p53 pathway is fully intact.</p>
 <p>The binary task is the most statistically stable part of the project. It has larger class support than the mutation-type task and asks a clearer biological question: whether RNA expression contains signal associated with TP53 mutation status. In both CCLE and TCGA, RNA-only models outperform simple baselines, supporting the conclusion that transcriptomic profiles contain predictive information about TP53 mutation status.</p>
 <h3 id="Task-2:-TP53-mutation-type">Task 2: TP53 mutation type<a class="anchor-link" href="#Task-2:-TP53-mutation-type">¶</a></h3><p>Task 2 is implemented as coarse TP53 mutation-type/consequence prediction. The teaching material describes many mutation categories, including missense, nonsense, insertion, deletion, frameshift, and splice-site mutations. Instead of modelling every raw category separately, I grouped related annotations into broader classes with enough sample support.</p>
 <p>In CCLE, the main classes are <code>wild_type</code>, <code>missense_or_inframe</code>, and <code>lof_or_splice</code>. In TCGA, the main classes are <code>WT</code>, <code>missense</code>, and <code>truncating_or_splice</code>. These classes capture an important biological distinction: missense/in-frame alterations often preserve protein length but alter sequence or local structure, whereas truncating, frameshift, nonsense, and splice-related events are more likely to severely disrupt TP53 function.</p>
@@ -21630,6 +21676,7 @@ Final holdout comparison including main models, RNA ablations, and soft-voting e
 <h3 id="Splitting-and-confounding">Splitting and confounding<a class="anchor-link" href="#Splitting-and-confounding">¶</a></h3><p>Both datasets require careful splitting because cancer lineage or cancer type can confound the relationship between RNA expression and TP53 mutation. Gene expression is highly tissue-specific, and TP53 mutation prevalence differs across cancer types. Therefore, the notebook uses adaptive label-by-lineage or label-by-cancer-type stratification where feasible. Rare strata are collapsed rather than forcing unstable splits.</p>
 <p>This stratification is used to balance train/test composition, not to train separate models within each lineage or cancer type. Rare lineages or cancer types may still have too few samples for reliable subgroup-specific conclusions. For this reason, the notebook also includes lineage/cancer-type audits, grouped evaluation, and model-family ablations.</p>
 <h3 id="Leakage-control">Leakage control<a class="anchor-link" href="#Leakage-control">¶</a></h3><p>Mutation annotation columns are used only to define TP53 labels and are not included as RNA predictors. Supervised feature selection, scaling, and model fitting are performed within training or cross-validation workflows. The TCGA RNA loader uses an unsupervised high-variance feature cap for memory management, but this step does not use TP53 labels. This caveat should be distinguished from supervised leakage.</p>
+<p>The compact CCLE <code>TP53_TARGETS</code> panel and the broader Fischer-style TP53 target-gene CSV are biological reference lists of p53-response genes. They are not mutation labels and not lists of genes mutated in the samples. When such genes are used in the CCLE feature builder, they enter only as RNA-expression measurements chosen from an a priori biological panel.</p>
 <h3 id="Interpretation">Interpretation<a class="anchor-link" href="#Interpretation">¶</a></h3><p>The strongest scientific conclusion is that RNA expression contains predictive signal for TP53 mutation status. The project does not prove that selected genes causally determine TP53 mutation status. Important genes may reflect TP53 pathway activity, DNA-damage response, cell-cycle effects, cancer lineage, proliferation, or dataset-specific structure.</p>
 <p>Task 2 should be interpreted more cautiously than Task 1. Mutation-type classes are smaller and more imbalanced, and different TP53 mutation types may produce overlapping downstream RNA effects. Therefore, macro-F1, balanced accuracy, per-class F1, and confusion matrices are more informative than accuracy alone.</p>
 <p>Overall, the project satisfies the assignment by building and evaluating RNA-based models for both binary TP53 mutation status and TP53 mutation-type/consequence prediction, while explicitly addressing leakage, lineage/cancer-type confounding, class imbalance, and cautious biological interpretation.</p>
