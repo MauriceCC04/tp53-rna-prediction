@@ -203,24 +203,6 @@ The TCGA notebook can use RAPIDS/cuML for repeated elastic-net logistic-regressi
 
 ## How to run
 
-### Option A: review the submitted notebook
-
-For grading, open:
-
-```text
-submission.ipynb
-```
-
-This is the final combined notebook intended to be read as the submitted report. It contains both code and executed outputs.
-
-To export it to HTML:
-
-```bash
-jupyter nbconvert --to html submission.ipynb
-```
-
-### Option B: rerun the modular CCLE workflow
-
 From the repository root:
 
 1. Place the raw CCLE files in `data/`.
@@ -242,7 +224,7 @@ This loads the processed CCLE artefacts and evaluates the CCLE models.
 
 On Kaggle, attach the CCLE Kaggle dataset and run `notebooks/ccle_modelling.ipynb` directly. The notebook is written to discover the `processed/` directory from the attached dataset.
 
-### Option C: rerun the TCGA workflow on Kaggle
+### Option B: rerun the modelling notebooks on Kaggle
 
 1. Create or open a Kaggle notebook.
 2. Enable the **2xT4 GPU** accelerator.
@@ -300,129 +282,3 @@ This grouping separates:
 - nonsense, frameshift, splice-site, or truncating events that are more likely to disrupt TP53 protein function.
 
 This is not a claim that every possible raw DNA-level mutation mechanism is modelled separately. It is a statistically stable mutation-type / consequence version of Task 2.
-
----
-
-## Method summary
-
-The workflow follows several leakage-control and bioinformatics safeguards:
-
-1. RNA expression profiles are used as features.
-2. TP53 labels are constructed from mutation annotations, not from RNA features.
-3. Mutation annotation columns are not used as predictors.
-4. CCLE sample matching aligns expression, mutation coverage, and metadata by `ModelID`.
-5. TCGA modelling uses a tumour-only, one-sample-per-patient cohort to reduce patient/sample leakage.
-6. Scaling and supervised feature selection are fit inside modelling workflows where appropriate.
-7. RNA-only models are compared with metadata-only baselines to assess lineage/cancer-type confounding.
-8. Cancer-type or lineage-aware evaluations are used as sensitivity checks.
-9. Binary and multiclass metrics are reported instead of relying only on accuracy.
-
-Model families include:
-
-- dummy baselines;
-- regularized logistic regression;
-- linear SVM;
-- random forest;
-- k-nearest neighbours;
-- PCA-based logistic regression;
-- soft-voting / ensemble-style models;
-- metadata-only models;
-- RNA + metadata or RNA + cancer-type models.
-
----
-
-## Evaluation metrics
-
-For Task 1, the project reports binary classification metrics such as:
-
-- AUROC;
-- AUPRC;
-- F1 score;
-- balanced accuracy;
-- precision and recall;
-- specificity;
-- confusion-matrix counts;
-- calibration / Brier score where applicable.
-
-For Task 2, the project reports multiclass metrics such as:
-
-- macro-F1;
-- weighted F1;
-- balanced accuracy;
-- per-class precision / recall / F1;
-- confusion matrices;
-- one-vs-rest AUROC / AUPRC where feasible.
-
-Macro-F1 and balanced accuracy are especially important for Task 2 because mutation-type classes are imbalanced.
-
----
-
-## Main results from the submitted notebook
-
-The final submitted notebook reports that RNA expression contains predictive signal for TP53 mutation status in both CCLE and TCGA.
-
-### CCLE Task 1
-
-The primary RNA-only elastic-net logistic-regression model achieved strong held-out binary classification performance, with AUROC around 0.93 and AUPRC around 0.95 in the submitted run.
-
-### CCLE Task 2
-
-The best CCLE mutation-type / consequence model was a multinomial RNA logistic-regression model. It achieved macro-F1 around 0.78, with lower performance for the smaller `lof_or_splice` class than for WT or missense/in-frame classes.
-
-### TCGA Task 1
-
-The TCGA RNA-only elastic-net model also achieved strong binary performance, but cancer-type-only baselines were non-trivial. This confirms that cancer type is an important confounder.
-
-### TCGA Task 2
-
-TCGA mutation-type prediction was harder than binary mutation-status prediction. The model performed best for WT and worse for smaller mutation-type classes such as truncating/splice events.
-
-The interpretation is therefore conservative: RNA expression predicts TP53 mutation status, but the signal is mixed with cancer lineage, tumour type, and dataset-specific structure.
-
----
-
-## Biological interpretation
-
-TP53 is a transcriptional regulator, so TP53 alteration can plausibly affect downstream gene-expression programs related to DNA damage response, cell-cycle arrest, apoptosis, senescence, and stress response.
-
-However, this project treats feature importance and model performance as evidence of predictive association, not proof of direct causality. A gene may be predictive because it is downstream of TP53, correlated with cancer lineage, associated with proliferation, affected by batch/dataset structure, or linked to another biological process.
-
-The metadata-only and cancer-type-aware analyses are included because TP53 mutation prevalence and RNA expression both vary substantially across cancer contexts.
-
----
-
-## Limitations
-
-1. **Task 2 uses grouped mutation classes.**  
-   Rare raw mutation mechanisms are grouped into broader consequence classes. This makes the task more stable but less granular.
-
-2. **Lineage and cancer-type confounding remain important.**  
-   Stratification, metadata baselines, and grouped analyses help quantify this issue but do not remove it completely.
-
-3. **CCLE and TCGA are different biological systems.**  
-   Cell lines and primary tumours differ in tumour purity, microenvironment, batch effects, and cohort composition.
-
-4. **Predictive association is not causation.**  
-   The models identify expression patterns associated with TP53 mutation labels but do not prove direct mechanisms.
-
-5. **Large datasets are external.**  
-   Reproduction requires access to the raw public datasets or the Kaggle datasets described above.
-
----
-
-## Reproducibility notes
-
-- Random seeds are fixed where applicable.
-- The final notebook was executed end-to-end before submission.
-- Data and processed outputs are not committed because of size.
-- `requirements.txt` lists the core packages used for the notebooks.
-- Kaggle 2xT4 GPU execution is recommended for the modelling notebooks, especially TCGA.
-- To reproduce the submitted report, use `submission.ipynb` and export an HTML copy with `nbconvert`.
-
----
-
-## Project conclusion
-
-Gene-expression profiles can predict TP53 mutation status with meaningful performance, especially for binary mutant-versus-wild-type prediction. Mutation-type prediction is more difficult but feasible when mutation annotations are grouped into biologically meaningful consequence classes.
-
-The main scientific conclusion is that TP53 mutation status leaves a detectable transcriptomic signal, but that signal overlaps with cancer lineage, tumour type, and dataset-specific structure. Therefore, leakage-safe modelling, appropriate metrics, metadata baselines, and cautious biological interpretation are essential.
